@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ agent_name }}</title>
+</head>
+<body>
+
+<h2>{{ agent_name }}</h2>
+
+{% if agent_name == "Diagnosis" %}
+    <h3>Diagnosis Results</h3>
+    <ul>
+    {% for d in agent_output %}
+        <li>{{ d.disease }} - {{ d.confidence }}%</li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <pre>{{ agent_output }}</pre>
+{% endif %}
+
+<a href="/">Back</a>
+</body>
+</html>

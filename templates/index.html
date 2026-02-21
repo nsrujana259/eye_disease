@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Eye Disease Detection System</title>
+    <style>
+        body { margin:0; font-family:"Segoe UI", Arial; background:#f2f5f9; }
+        header { background:#0d47a1; color:white; padding:20px; text-align:center; }
+        .container { max-width:900px; margin:40px auto; display:grid; grid-template-columns:1fr 1fr; gap:30px; }
+        .card { background:white; padding:25px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.08); }
+        button { background:#2e7d32; color:white; border:none; padding:10px 18px; border-radius:6px; cursor:pointer; margin-top:10px; }
+        button.secondary { background:#1565c0; }
+        .result-box { grid-column:1/3; background:white; padding:20px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.08); text-align:center; }
+        #previewImage { max-width:300px; max-height:300px; display:none; margin-top:15px; border-radius:8px; }
+        video { width:100%; border-radius:8px; }
+    </style>
+</head>
+
+<body>
+
+<header>
+    <h1>AI‑Based Eye Disease Detection</h1>
+    <p>Automated Screening using Deep Learning & Machine Learning</p>
+</header>
+
+<div class="container">
+
+    <!-- Upload -->
+    <div class="card">
+        <h2>Upload Eye Image</h2>
+        <form id="uploadForm" enctype="multipart/form-data">
+            <input type="file" name="image" required>
+            <br>
+            <button type="submit">Upload & Analyze</button>
+        </form>
+    </div>
+
+    <!-- Camera -->
+    <div class="card">
+        <h2>Real‑Time Camera Capture</h2>
+        <video id="video" autoplay></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <button class="secondary" onclick="startCamera()">Open Camera</button>
+        <button onclick="captureImage()">Capture & Analyze</button>
+    </div>
+
+    <!-- Result -->
+    <div class="result-box">
+        <h3>Prediction Result</h3>
+        <div id="result">No analysis performed yet.</div>
+        <img id="previewImage">
+
+        <div style="margin-top:25px;">
+            <h4 style="color:#0d47a1;">AI Agents Involved</h4>
+            <a href="/agent/diagnosis"><button class="agent-btn" disabled>Diagnosis Agent</button></a>
+            <a href="/agent/validation"><button class="agent-btn" disabled>Validation Agent</button></a>
+            <a href="/agent/risk"><button class="agent-btn" disabled>Risk Assessment Agent</button></a>
+            <a href="/agent/explanation"><button class="agent-btn" disabled>Explanation Agent</button></a>
+            <a href="/agent/report"><button class="agent-btn" disabled>Report Agent</button></a>
+        </div>
+    </div>
+
+</div>
+
+<!-- ✅ SINGLE, CLEAN SCRIPT -->
+<script>
+console.log("INDEX JS LOADED");
+
+let video = document.getElementById("video");
+let canvas = document.getElementById("canvas");
+let previewImage = document.getElementById("previewImage");
+let agentButtons = document.querySelectorAll(".agent-btn");
+
+/* -------- Camera -------- */
+async function startCamera() {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        video.srcObject = stream;
+    } catch (err) {
+        alert("Camera access denied");
+        console.error(err);
+    }
+}
+
+function captureImage() {
+    if (!video.srcObject) {
+        alert("Camera not started");
+        return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext("2d").drawImage(video, 0, 0);
+
+    canvas.toBlob(blob => {
+        sendImage(blob);
+    }, "image/jpeg");
+}
+
+/* -------- Upload (COMMON) -------- */
+function sendImage(file) {
+    let fd = new FormData();
+    fd.append("image", file);
+
+    fetch("/upload", {
+        method: "POST",
+        body: fd,
+        credentials: "same-origin"
+    })
+    .then(r => r.json())
+    .then(d => {
+        console.log("BACKEND RESPONSE:", d);
+
+        if (d.prediction && Array.isArray(d.prediction)) {
+    document.getElementById("result").innerText =
+        "Detected Diseases: " + d.prediction.join(", ");
+    agentButtons.forEach(btn => btn.disabled = false);
+} else if (d.error) {
+    document.getElementById("result").innerText =
+        "Error: " + d.error;
+} else {
+    document.getElementById("result").innerText =
+        "No disease detected (N)";
+    agentButtons.forEach(btn => btn.disabled = false);
+}
+
+        previewImage.src = "/static/captured.jpg?" + Date.now();
+        previewImage.style.display = "block";
+        fetch("/debug/session", { credentials: "same-origin" })
+            .then(r => r.json())
+            .then(s => console.log("SESSION DEBUG:", s))
+            .catch(err => console.error("SESSION DEBUG ERROR:", err));
+    })
+    .catch(err => console.error(err));
+}
+
+/* -------- File Upload -------- */
+document.getElementById("uploadForm").onsubmit = function(e){
+    e.preventDefault();
+    sendImage(this.image.files[0]);
+};
+</script>
+
+</body>
+</html>
