@@ -2,6 +2,10 @@
 <html>
 <head>
     <title>{{ agent_name }}</title>
+    <style>
+        .download-btn { background:#1565c0; color:white; border:none; padding:10px 14px; border-radius:6px; margin-right:10px; cursor:pointer; }
+        pre { white-space: pre-wrap; background:#f4f6f8; padding:12px; border-radius:8px; }
+    </style>
 </head>
 <body>
 
@@ -14,10 +18,38 @@
         <li>{{ d.disease }} - {{ d.confidence }}%</li>
     {% endfor %}
     </ul>
+{% elif agent_name == "Report" %}
+    <h3>Patient-Friendly Report</h3>
+    <pre>{{ agent_output.patient_report_text or agent_output.patient_report }}</pre>
+
+    <h3>Doctor / Clinical Report</h3>
+    <pre>{{ agent_output.doctor_report_text or agent_output.doctor_report }}</pre>
+
+    <div style="margin-top:16px;">
+        <button class="download-btn" onclick="downloadReport('/download/patient_report', 'patient_report.txt')">Download Patient Report</button>
+        <button class="download-btn" onclick="downloadReport('/download/doctor_report', 'doctor_report.txt')">Download Doctor Report</button>
+    </div>
 {% else %}
     <pre>{{ agent_output }}</pre>
 {% endif %}
 
-<a href="/">Back</a>
+<a href="/">Back to Dashboard</a>
+<script>
+async function downloadReport(url, filename) {
+    const response = await fetch(url, { credentials: 'same-origin' });
+    if (!response.ok) {
+        alert('Unable to download report. Please upload an image first.');
+        return;
+    }
+    const blob = await response.blob();
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(link.href);
+}
+</script>
 </body>
 </html>

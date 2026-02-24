@@ -1,12 +1,11 @@
 print("ACTIVE FILE LOADED:", __file__)
 
-from flask import Flask, render_template, request, jsonify, session
+from flask import Flask, render_template, request, jsonify, session,Response
 from flask_session import Session
 import os
 import torch
 import joblib
 import cv2
-
 # ===============================
 # ML IMPORTS
 # ===============================
@@ -81,7 +80,21 @@ def to_builtin(value):
 # ===============================
 @app.route("/")
 def index():
-    return render_template("index.html")
+        returning_from_agent = session.pop("returning_from_agent", False)
+        
+        if not returning_from_agent:
+            session.pop("dashboard_state", None)
+            session.pop("agent_outputs", None)
+            session.modified = True
+    
+        dashboard_state = session.get("dashboard_state", {})
+        return render_template(
+        "index.html",
+        prediction=dashboard_state.get("prediction"),
+        image_url=dashboard_state.get("image_url"),
+        uploaded_name=dashboard_state.get("uploaded_name"),
+        has_result=bool(dashboard_state.get("prediction"))
+    )
 
 
 @app.route("/upload", methods=["POST"])
@@ -118,10 +131,17 @@ def upload_image():
     diag = diagnosis_agent(ml_output)
     valid = validation_agent(diag)
     risk = risk_assessment_agent(valid)
-    explain = explanation_agent(valid)
+    explain = explanation_agent(diag)
     reports = report_agent(valid[0]["disease"], risk, explain)
+    reports = {
+        "patient_report_text": reports.get("patient_report_text") or reports.get("patient_report", ""),
+        "doctor_report_text": reports.get("doctor_report_text") or reports.get("doctor_report", ""),
+        "patient_report": reports.get("patient_report_text") or reports.get("patient_report", ""),
+        "doctor_report": reports.get("doctor_report_text") or reports.get("doctor_report", ""),
+    }
 
     # ---------- STORE IN SESSION (SAFE) ----------
+    image_url = f"/{img_path}?v={int(os.path.getmtime(img_path))}"
     session["agent_outputs"] = to_builtin({
         "diagnosis": diag,
         "validation": valid,
@@ -129,7 +149,12 @@ def upload_image():
         "explanation": explain,
         "report": reports
     })
-
+    uploaded_name = os.path.basename(file.filename) if file.filename else "captured.jpg"
+    session["dashboard_state"] = {
+        "prediction": predictions,
+        "image_url": image_url,
+        "uploaded_name": uploaded_name
+    }
     session.modified = True
 
     return jsonify(prediction=predictions)
@@ -145,14 +170,44 @@ def agent_page(agent_name):
 
     if agent_name not in agent_outputs:
         return "Invalid agent."
+    
+    session["returning_from_agent"] = True
 
     return render_template(
         "agent.html",
         agent_name=agent_name.title(),
         agent_output=agent_outputs[agent_name]
     )
+@app.route("/download/patient_report")
+def download_patient_report():
+    agent_outputs = session.get("agent_outputs", {})
+    report_data = agent_outputs.get("report", {})
+    text = report_data.get("patient_report_text") or report_data.get("patient_report")
+
+    if not text:
+        return "Please upload an image first.", 400
+
+    return Response(
+        text,
+        mimetype="text/plain",
+        headers={"Content-Disposition": "attachment; filename=patient_report.txt"}
+    )
 
 
+@app.route("/download/doctor_report")
+def download_doctor_report():
+    agent_outputs = session.get("agent_outputs", {})
+    report_data = agent_outputs.get("report", {})
+    text = report_data.get("doctor_report_text") or report_data.get("doctor_report")
+
+    if not text:
+        return "Please upload an image first.", 400
+
+    return Response(
+        text,
+        mimetype="text/plain",
+        headers={"Content-Disposition": "attachment; filename=doctor_report.txt"}
+    )
 # ===============================
 # RUN
 # ===============================
@@ -165,3 +220,4 @@ if __name__ == "__main__":
         debug=False,
         use_reloader=False
     )
+    

@@ -29,7 +29,8 @@
     <div class="card">
         <h2>Upload Eye Image</h2>
         <form id="uploadForm" enctype="multipart/form-data">
-            <input type="file" name="image" required>
+            <input type="file" id="imageInput" name="image" required>
+            <div id="fileNameLabel" style="margin-top:8px;color:#455a64;font-size:14px;">{% if uploaded_name %}Last uploaded: {{ uploaded_name }}{% else %}No file selected.{% endif %}</div>
             <br>
             <button type="submit">Upload & Analyze</button>
         </form>
@@ -47,8 +48,9 @@
     <!-- Result -->
     <div class="result-box">
         <h3>Prediction Result</h3>
-        <div id="result">No analysis performed yet.</div>
-        <img id="previewImage">
+        <div id="result">{% if has_result %}Detected Diseases: {{ prediction | join(", ") }}{% else %}No analysis performed yet.{% endif %}</div>
+        <img id="previewImage" {% if image_url %}src="{{ image_url }}" style="display:block;"{% endif %}>
+
 
         <div style="margin-top:25px;">
             <h4 style="color:#0d47a1;">AI Agents Involved</h4>
@@ -70,6 +72,10 @@ let video = document.getElementById("video");
 let canvas = document.getElementById("canvas");
 let previewImage = document.getElementById("previewImage");
 let agentButtons = document.querySelectorAll(".agent-btn");
+let hasResult = {{ "true" if has_result else "false" }};
+if (hasResult) {
+    agentButtons.forEach(btn => btn.disabled = false);
+}
 
 /* -------- Camera -------- */
 async function startCamera() {
@@ -93,15 +99,18 @@ function captureImage() {
     canvas.getContext("2d").drawImage(video, 0, 0);
 
     canvas.toBlob(blob => {
-        sendImage(blob);
+            sendImage(blob, "Last uploaded: captured.jpg");
     }, "image/jpeg");
 }
 
 /* -------- Upload (COMMON) -------- */
-function sendImage(file) {
+function sendImage(file, sourceLabel = null) {
+
     let fd = new FormData();
     fd.append("image", file);
-
+    if (sourceLabel) {
+        fileNameLabel.innerText = sourceLabel;
+    }
     fetch("/upload", {
         method: "POST",
         body: fd,
@@ -126,19 +135,22 @@ function sendImage(file) {
 
         previewImage.src = "/static/captured.jpg?" + Date.now();
         previewImage.style.display = "block";
-        fetch("/debug/session", { credentials: "same-origin" })
-            .then(r => r.json())
-            .then(s => console.log("SESSION DEBUG:", s))
-            .catch(err => console.error("SESSION DEBUG ERROR:", err));
-    })
-    .catch(err => console.error(err));
+        
+}).catch(err =>console.error("Upload error:", err));
 }
-
 /* -------- File Upload -------- */
+imageInput.addEventListener("change", function() {
+    if (this.files && this.files[0]) {
+        fileNameLabel.innerText = "Selected file: " + this.files[0].name;
+    } else {
+        fileNameLabel.innerText = "No file selected.";
+    }
+});
 document.getElementById("uploadForm").onsubmit = function(e){
     e.preventDefault();
     sendImage(this.image.files[0]);
 };
+
 </script>
 
 </body>

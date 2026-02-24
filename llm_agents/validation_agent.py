@@ -2,13 +2,12 @@ def validation_agent(diagnosis_list):
     validated = []
 
     for d in diagnosis_list:
-        if d["confidence"] >= 50:
-            validated.append(d)
+        status = "Confirmed" if d["confidence"] >= 50 else "Low confidence"
 
-    if not validated:
         validated.append({
-            "disease": "Normal Retina",
-            "confidence": 100
+            "disease": d["disease"],
+            "confidence": d["confidence"],
+            "validation_status": status
         })
 
     return validated
