@@ -2,9 +2,15 @@
 <html>
 <head>
     <title>{{ agent_name }}</title>
-    <style>
-        .download-btn { background:#1565c0; color:white; border:none; padding:10px 14px; border-radius:6px; margin-right:10px; cursor:pointer; }
-        pre { white-space: pre-wrap; background:#f4f6f8; padding:12px; border-radius:8px; }
+        <style>
+        body { font-family:"Segoe UI", Arial; background:#f4f7fb; margin:20px; }
+        .download-btn, .control-btn { background:#1565c0; color:white; border:none; padding:10px 14px; border-radius:6px; margin-right:10px; margin-top:10px; cursor:pointer; }
+        .control-btn.secondary { background:#2e7d32; }
+        .control-btn.warn { background:#ef6c00; }
+        pre { white-space: pre-wrap; background:#ffffff; padding:12px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
+        .report-card { background:#fff; padding:16px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); margin-bottom:20px; }
+        .status-text { color:#455a64; font-size:14px; margin-top:8px; }
+        select { margin-left:8px; padding:6px; border-radius:6px; }
     </style>
 </head>
 <body>
@@ -19,15 +25,44 @@
     {% endfor %}
     </ul>
 {% elif agent_name == "Report" %}
-    <h3>Patient-Friendly Report</h3>
-    <pre>{{ agent_output.patient_report_text or agent_output.patient_report }}</pre>
+    <div class="report-card">
+        <h3>Patient-Friendly Report</h3>
+        <label for="patient-language">Language:</label>
+        <select id="patient-language" onchange="translateReport('patient')">
+            <option>English</option>
+            <option>Hindi</option>
+            <option>Telugu</option>
+            <option>Spanish</option>
+            <option>French</option>
+        </select>
+        <pre id="patient-report">{{ agent_output.patient_report_text or agent_output.patient_report }}</pre>
+        <div>
+            <button class="download-btn" onclick="downloadReport('/download/patient_report', 'patient_report.txt')">Download Patient Report</button>
+            <button class="control-btn secondary" onclick="playReport('patient')">Play</button>
+            <button class="control-btn" onclick="pauseSpeech()">Pause</button>
+            <button class="control-btn warn" onclick="stopSpeech()">Stop</button>
+        </div>
+        <div class="status-text" id="patient-status"></div>
+    </div>
 
-    <h3>Doctor / Clinical Report</h3>
-    <pre>{{ agent_output.doctor_report_text or agent_output.doctor_report }}</pre>
-
-    <div style="margin-top:16px;">
-        <button class="download-btn" onclick="downloadReport('/download/patient_report', 'patient_report.txt')">Download Patient Report</button>
-        <button class="download-btn" onclick="downloadReport('/download/doctor_report', 'doctor_report.txt')">Download Doctor Report</button>
+    <div class="report-card">
+        <h3>Doctor / Clinical Report</h3>
+        <label for="doctor-language">Language:</label>
+        <select id="doctor-language" onchange="translateReport('doctor')">
+            <option>English</option>
+            <option>Hindi</option>
+            <option>Telugu</option>
+            <option>Spanish</option>
+            <option>French</option>
+        </select>
+        <pre id="doctor-report">{{ agent_output.doctor_report_text or agent_output.doctor_report }}</pre>
+        <div>
+            <button class="download-btn" onclick="downloadReport('/download/doctor_report', 'doctor_report.txt')">Download Doctor Report</button>
+            <button class="control-btn secondary" onclick="playReport('doctor')">Play</button>
+            <button class="control-btn" onclick="pauseSpeech()">Pause</button>
+            <button class="control-btn warn" onclick="stopSpeech()">Stop</button>
+        </div>
+        <div class="status-text" id="doctor-status"></div>
     </div>
 {% else %}
     <pre>{{ agent_output }}</pre>
@@ -35,6 +70,13 @@
 
 <a href="/">Back to Dashboard</a>
 <script>
+    const reportVoices = {
+    English: 'en-US',
+    Hindi: 'hi-IN',
+    Telugu: 'te-IN',
+    Spanish: 'es-ES',
+    French: 'fr-FR'
+};
 async function downloadReport(url, filename) {
     const response = await fetch(url, { credentials: 'same-origin' });
     if (!response.ok) {
@@ -49,6 +91,46 @@ async function downloadReport(url, filename) {
     link.click();
     link.remove();
     window.URL.revokeObjectURL(link.href);
+}
+async function translateReport(reportType) {
+    const language = document.getElementById(`${reportType}-language`).value;
+    const statusEl = document.getElementById(`${reportType}-status`);
+    statusEl.innerText = `Translating to ${language}...`;
+
+    try {
+        const response = await fetch('/translate_report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify({ report_type: reportType, language })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            statusEl.innerText = data.error || 'Translation failed.';
+            return;
+        }
+        document.getElementById(`${reportType}-report`).innerText = data.translated_text;
+        statusEl.innerText = `Translated to ${language}.`;
+    } catch (error) {
+        statusEl.innerText = 'Translation failed. Please try again.';
+    }
+}
+
+function playReport(reportType) {
+    stopSpeech();
+    const text = document.getElementById(`${reportType}-report`).innerText;
+    const language = document.getElementById(`${reportType}-language`).value;
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = reportVoices[language] || 'en-US';
+    window.speechSynthesis.speak(utterance);
+}
+
+function pauseSpeech() {
+    window.speechSynthesis.pause();
+}
+
+function stopSpeech() {
+    window.speechSynthesis.cancel();
 }
 </script>
 </body>

@@ -22,7 +22,7 @@ from llm_agents.validation_agent import validation_agent
 from llm_agents.risk_agent import risk_assessment_agent
 from llm_agents.explanation_agent import explanation_agent
 from llm_agents.report_agent import report_agent
-
+from llm_agents.llm_client import call_llm
 
 # ===============================
 # APP INITIALIZATION
@@ -208,7 +208,51 @@ def download_doctor_report():
         mimetype="text/plain",
         headers={"Content-Disposition": "attachment; filename=doctor_report.txt"}
     )
-# ===============================
+@app.route("/translate_report", methods=["POST"])
+def translate_report():
+    payload = request.get_json(silent=True) or {}
+    report_type = payload.get("report_type")
+    target_language = payload.get("language", "English")
+
+    if report_type not in {"patient", "doctor"}:
+        return jsonify(error="Invalid report type"), 400
+
+    agent_outputs = session.get("agent_outputs", {})
+    report_data = agent_outputs.get("report", {})
+
+    source_text = (
+        report_data.get("patient_report_text") or report_data.get("patient_report", "")
+        if report_type == "patient"
+        else report_data.get("doctor_report_text") or report_data.get("doctor_report", "")
+    )
+
+    if not source_text:
+        return jsonify(error="Report not available. Please upload an image first."), 400
+
+    if target_language == "English":
+        return jsonify(translated_text=source_text)
+
+    translations = session.get("report_translations", {})
+    report_cache = translations.setdefault(report_type, {})
+    if target_language in report_cache:
+        return jsonify(translated_text=report_cache[target_language])
+
+    prompt = f"""
+Translate the following medical screening report into {target_language}.
+Keep medical terms accurate and unchanged where needed.
+Keep the meaning and structure consistent.
+Return only the translated report text.
+
+Report:
+{source_text}
+"""
+
+    translated_text = call_llm(prompt)
+    report_cache[target_language] = translated_text
+    session["report_translations"] = translations
+    session.modified = True
+
+    return jsonify(translated_text=translated_text)
 # RUN
 # ===============================
 if __name__ == "__main__":

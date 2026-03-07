@@ -13,6 +13,9 @@
         .result-box { grid-column:1/3; background:white; padding:20px; border-radius:10px; box-shadow:0 6px 18px rgba(0,0,0,0.08); text-align:center; }
         #previewImage { max-width:300px; max-height:300px; display:none; margin-top:15px; border-radius:8px; }
         video { width:100%; border-radius:8px; }
+        .upload-toast { position:fixed; top:20px; right:20px; background:#263238; color:#fff; padding:12px 16px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.2); display:none; z-index:1000; }
+        .upload-toast.success { background:#2e7d32; }
+        .upload-toast.error { background:#c62828; }
     </style>
 </head>
 
@@ -22,7 +25,7 @@
     <h1>AI‑Based Eye Disease Detection</h1>
     <p>Automated Screening using Deep Learning & Machine Learning</p>
 </header>
-
+<div id="uploadToast" class="upload-toast"></div>
 <div class="container">
 
     <!-- Upload -->
@@ -72,9 +75,24 @@ let video = document.getElementById("video");
 let canvas = document.getElementById("canvas");
 let previewImage = document.getElementById("previewImage");
 let agentButtons = document.querySelectorAll(".agent-btn");
+let imageInput = document.getElementById("imageInput");
+let fileNameLabel = document.getElementById("fileNameLabel");
 let hasResult = {{ "true" if has_result else "false" }};
+let uploadToast = document.getElementById("uploadToast");
 if (hasResult) {
     agentButtons.forEach(btn => btn.disabled = false);
+}
+
+function showToast(message, type = "") {
+    uploadToast.className = "upload-toast" + (type ? ` ${type}` : "");
+    uploadToast.innerText = message;
+    uploadToast.style.display = "block";
+}
+
+function hideToast(delay = 1500) {
+    setTimeout(() => {
+        uploadToast.style.display = "none";
+    }, delay);
 }
 
 /* -------- Camera -------- */
@@ -105,7 +123,7 @@ function captureImage() {
 
 /* -------- Upload (COMMON) -------- */
 function sendImage(file, sourceLabel = null) {
-
+        showToast("Uploading image...");
     let fd = new FormData();
     fd.append("image", file);
     if (sourceLabel) {
@@ -121,13 +139,19 @@ function sendImage(file, sourceLabel = null) {
         console.log("BACKEND RESPONSE:", d);
 
         if (d.prediction && Array.isArray(d.prediction)) {
+            showToast("Image has been successfully uploaded.", "success");
+    hideToast();
     document.getElementById("result").innerText =
         "Detected Diseases: " + d.prediction.join(", ");
     agentButtons.forEach(btn => btn.disabled = false);
 } else if (d.error) {
+    showToast("Image upload failed. Please try again.", "error");
+    hideToast(2500);
     document.getElementById("result").innerText =
         "Error: " + d.error;
 } else {
+    showToast("Image has been successfully uploaded.", "success");
+    hideToast();
     document.getElementById("result").innerText =
         "No disease detected (N)";
     agentButtons.forEach(btn => btn.disabled = false);
@@ -136,7 +160,11 @@ function sendImage(file, sourceLabel = null) {
         previewImage.src = "/static/captured.jpg?" + Date.now();
         previewImage.style.display = "block";
         
-}).catch(err =>console.error("Upload error:", err));
+}).catch(err => {
+        console.error(err);
+        showToast("Image upload failed. Please try again.", "error");
+        hideToast(2500);
+    });
 }
 /* -------- File Upload -------- */
 imageInput.addEventListener("change", function() {
