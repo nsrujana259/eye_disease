@@ -2,6 +2,7 @@
 <html>
 <head>
     <title>{{ agent_name }}</title>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
         <style>
         body { font-family:"Segoe UI", Arial; background:#f4f7fb; margin:20px; }
         .download-btn, .control-btn { background:#1565c0; color:white; border:none; padding:10px 14px; border-radius:6px; margin-right:10px; margin-top:10px; cursor:pointer; }
@@ -17,15 +18,65 @@
 
 <h2>{{ agent_name }}</h2>
 {% if agent_name|lower == "diagnosis" %}
-    <div class="diagnosis-card">
+    <div class="report-card">
         <h3>Diagnosis Results</h3>
         <ul>
-        {% for d in agent_output %}
-            <li>{{ d.disease }} - {{ d.confidence }}%</li>
+        {% for d in agent_output.results %}
+            <li><strong>{{ d.disease }}</strong> - {{ d.confidence }}%</li>
         {% endfor %}
         </ul>
-    </div>
+        <h3>Grad-CAM Visualization</h3>
+        <img src="{{ agent_output.heatmap_url }}" style="max-width:420px;border-radius:8px; align:center;" alt="Grad-CAM heatmap">
 
+        <h3>Original Retina Image</h3>
+        <img src="{{ agent_output.image_url }}" style="max-width:420px;border-radius:8px; align:center;" alt="Original retina image">
+
+        <h3>Disease Probability Distribution</h3>
+        <canvas id="diseaseProbabilityChart" style="max-width:640px;"></canvas>
+    </div>
+<script>
+        const probabilityMap = {{ agent_output.probabilities | tojson }};
+        const labels = Object.keys(probabilityMap || {});
+        const values = Object.values(probabilityMap || {});
+
+        const chartCanvas = document.getElementById('diseaseProbabilityChart');
+        if (window.Chart && chartCanvas && labels.length > 0) {
+            const ctx = chartCanvas.getContext('2d');
+            new window.Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: 'Probability (%)',
+                        data: values,
+                        backgroundColor: 'rgba(21, 101, 192, 0.7)',
+                        borderColor: 'rgba(21, 101, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Disease Probability Distribution'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    }
+                }
+            });
+        } else if (chartCanvas) {
+            chartCanvas.insertAdjacentHTML(
+                'afterend',
+                '<p style="color:#c62828;">Probability chart unavailable: Chart.js failed to load in this environment.</p>'
+            );
+        }
+    </script>
 {% elif agent_name|lower == "report" %}
     <div class="report-card">
         <h3>Patient-Friendly Report</h3>
@@ -46,7 +97,7 @@
         </div>
         <div class="status-text" id="patient-status"></div>
     </div>
-
+    
     <div class="report-card">
         <h3>Doctor / Clinical Report</h3>
         <label for="doctor-language">Language:</label>

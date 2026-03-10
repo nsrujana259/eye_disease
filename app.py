@@ -13,7 +13,7 @@ from preprocessing.basic_preprocess import basic_preprocess
 from unet.unet_segment import unet_segment
 from models.densenet_loader import load_densenet
 from inference.predict import predict_diseases
-
+from inference.gradcam import generate_gradcam_overlay
 # ===============================
 # AGENT IMPORTS
 # ===============================
@@ -55,6 +55,16 @@ device = torch.device("cpu")
 densenet = load_densenet(device)
 lgb_model = joblib.load("models/lightgbm_classifier (1).pkl")
 
+DISEASE_LABELS = {
+    "N": "Normal",
+    "D": "Diabetic Retinopathy",
+    "G": "Glaucoma",
+    "C": "Cataract",
+    "A": "Age-related Macular Degeneration",
+    "H": "Hypertension-related Retinopathy",
+    "M": "Myopia",
+    "O": "Other Retinal Abnormalities",
+}
 
 # ===============================
 # SAFE SERIALIZER
@@ -118,10 +128,13 @@ def upload_image():
         img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
 
     # ---------- MODEL PREDICTION ----------
-    predictions, confidence_scores = predict_diseases(
-        densenet, lgb_model, img, return_confidence=True
+    predictions, confidence_scores, all_probabilities = predict_diseases(
+        densenet,
+        lgb_model,
+        img,
+        return_confidence=True,
+        return_probabilities=True,
     )
-
     ml_output = {
         "diseases": predictions,
         "confidence": confidence_scores
@@ -139,11 +152,25 @@ def upload_image():
         "patient_report": reports.get("patient_report_text") or reports.get("patient_report", ""),
         "doctor_report": reports.get("doctor_report_text") or reports.get("doctor_report", ""),
     }
+    heatmap_path = os.path.join("static", "gradcam_heatmap.jpg")
+    focus_label = predictions[0] if predictions else "N"
+    focus_index = list(DISEASE_LABELS.keys()).index(focus_label) if focus_label in DISEASE_LABELS else None
+    generate_gradcam_overlay(densenet, img, heatmap_path, focus_index=focus_index)
 
+    disease_probabilities = {
+        DISEASE_LABELS.get(code, code): round(score * 100, 2)
+        for code, score in all_probabilities.items()
+    }
     # ---------- STORE IN SESSION (SAFE) ----------
     image_url = f"/{img_path}?v={int(os.path.getmtime(img_path))}"
+    heatmap_url = f"/{heatmap_path}?v={int(os.path.getmtime(heatmap_path))}"
     session["agent_outputs"] = to_builtin({
-        "diagnosis": diag,
+        "diagnosis": {
+            "results": diag,
+            "probabilities": disease_probabilities,
+            "heatmap_url": heatmap_url,
+            "image_url": image_url,
+        },
         "validation": valid,
         "risk": risk,
         "explanation": explain,
@@ -264,4 +291,3 @@ if __name__ == "__main__":
         debug=False,
         use_reloader=False
     )
-    
