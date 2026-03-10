@@ -1,5 +1,6 @@
 from llm_agents.llm_client import call_llm
 
+
 def explanation_agent(validated):
     prompt = f"""
 You are a medical explanation assistant.
@@ -21,5 +22,7 @@ STRICT RULES:
 - Use simple, patient-friendly medical language.
 - Stay strictly aligned with the given diagnosis.
 """
+
+
 
     return call_llm(prompt)

@@ -9,7 +9,7 @@ client = OpenAI(
     base_url="https://openrouter.ai/api/v1"
 )
 MODEL_CANDIDATES = [
-    "mistralai/mistral-7b-instruct",
+    "nvidia/llama-nemotron-embed-vl-1b-v2:free",
     "mistralai/mistral-7b-instruct:free",
     "openai/gpt-3.5-turbo",
 ]
@@ -44,4 +44,5 @@ def call_llm(prompt):
         "Please consult a qualified doctor for clinical interpretation. "
         f"(LLM error: {last_error})"
     )
+
     return response.choices[0].message.content
