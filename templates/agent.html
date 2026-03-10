@@ -16,15 +16,17 @@
 <body>
 
 <h2>{{ agent_name }}</h2>
+{% if agent_name|lower == "diagnosis" %}
+    <div class="diagnosis-card">
+        <h3>Diagnosis Results</h3>
+        <ul>
+        {% for d in agent_output %}
+            <li>{{ d.disease }} - {{ d.confidence }}%</li>
+        {% endfor %}
+        </ul>
+    </div>
 
-{% if agent_name == "Diagnosis" %}
-    <h3>Diagnosis Results</h3>
-    <ul>
-    {% for d in agent_output %}
-        <li>{{ d.disease }} - {{ d.confidence }}%</li>
-    {% endfor %}
-    </ul>
-{% elif agent_name == "Report" %}
+{% elif agent_name|lower == "report" %}
     <div class="report-card">
         <h3>Patient-Friendly Report</h3>
         <label for="patient-language">Language:</label>
@@ -37,7 +39,7 @@
         </select>
         <pre id="patient-report">{{ agent_output.patient_report_text or agent_output.patient_report }}</pre>
         <div>
-            <button class="download-btn" onclick="downloadReport('/download/patient_report', 'patient_report.txt')">Download Patient Report</button>
+            <button class="download-btn" onclick="downloadVisibleReport('patient', 'patient_report.txt')">Download Patient Report</button>
             <button class="control-btn secondary" onclick="playReport('patient')">Play</button>
             <button class="control-btn" onclick="pauseSpeech()">Pause</button>
             <button class="control-btn warn" onclick="stopSpeech()">Stop</button>
@@ -57,81 +59,86 @@
         </select>
         <pre id="doctor-report">{{ agent_output.doctor_report_text or agent_output.doctor_report }}</pre>
         <div>
-            <button class="download-btn" onclick="downloadReport('/download/doctor_report', 'doctor_report.txt')">Download Doctor Report</button>
+            <button class="download-btn" onclick="downloadVisibleReport('doctor', 'doctor_report.txt')">Download Doctor Report</button>
             <button class="control-btn secondary" onclick="playReport('doctor')">Play</button>
             <button class="control-btn" onclick="pauseSpeech()">Pause</button>
             <button class="control-btn warn" onclick="stopSpeech()">Stop</button>
         </div>
         <div class="status-text" id="doctor-status"></div>
     </div>
+
+    <script>
+    const reportVoices = {
+        English: 'en-US',
+        Hindi: 'hi-IN',
+        Telugu: 'te-IN',
+        Spanish: 'es-ES',
+        French: 'fr-FR'
+    };
+
+    async function translateReport(reportType) {
+        const language = document.getElementById(`${reportType}-language`).value;
+        const statusEl = document.getElementById(`${reportType}-status`);
+        statusEl.innerText = `Translating to ${language}...`;
+
+        try {
+            const response = await fetch('/translate_report', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ report_type: reportType, language })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+                statusEl.innerText = data.error || 'Translation failed.';
+                return;
+            }
+            document.getElementById(`${reportType}-report`).innerText = data.translated_text;
+            statusEl.innerText = `Translated to ${language}.`;
+        } catch (error) {
+            statusEl.innerText = 'Translation failed. Please try again.';
+        }
+    }
+
+    function downloadVisibleReport(reportType, filename) {
+        const reportText = document.getElementById(`${reportType}-report`).innerText;
+        // UTF-8 BOM improves readability in Windows editors for Telugu/Hindi/etc.
+        const utf8Bom = '\uFEFF';
+        const blob = new Blob([utf8Bom + reportText], { type: 'text/plain;charset=utf-8' });
+        const link = document.createElement('a');
+        link.href = window.URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(link.href);
+    }
+
+    // Backward-compatible alias if older cached markup calls downloadReport(...)
+    function downloadReport(reportType, filename) {
+        downloadVisibleReport(reportType, filename);
+    }
+
+    function playReport(reportType) {
+        stopSpeech();
+        const text = document.getElementById(`${reportType}-report`).innerText;
+        const language = document.getElementById(`${reportType}-language`).value;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = reportVoices[language] || 'en-US';
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function pauseSpeech() {
+        window.speechSynthesis.pause();
+    }
+
+    function stopSpeech() {
+        window.speechSynthesis.cancel();
+    }
+    </script>
 {% else %}
     <pre>{{ agent_output }}</pre>
 {% endif %}
-
 <a href="/">Back to Dashboard</a>
-<script>
-    const reportVoices = {
-    English: 'en-US',
-    Hindi: 'hi-IN',
-    Telugu: 'te-IN',
-    Spanish: 'es-ES',
-    French: 'fr-FR'
-};
-async function downloadReport(url, filename) {
-    const response = await fetch(url, { credentials: 'same-origin' });
-    if (!response.ok) {
-        alert('Unable to download report. Please upload an image first.');
-        return;
-    }
-    const blob = await response.blob();
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(link.href);
-}
-async function translateReport(reportType) {
-    const language = document.getElementById(`${reportType}-language`).value;
-    const statusEl = document.getElementById(`${reportType}-status`);
-    statusEl.innerText = `Translating to ${language}...`;
-
-    try {
-        const response = await fetch('/translate_report', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'same-origin',
-            body: JSON.stringify({ report_type: reportType, language })
-        });
-        const data = await response.json();
-        if (!response.ok) {
-            statusEl.innerText = data.error || 'Translation failed.';
-            return;
-        }
-        document.getElementById(`${reportType}-report`).innerText = data.translated_text;
-        statusEl.innerText = `Translated to ${language}.`;
-    } catch (error) {
-        statusEl.innerText = 'Translation failed. Please try again.';
-    }
-}
-
-function playReport(reportType) {
-    stopSpeech();
-    const text = document.getElementById(`${reportType}-report`).innerText;
-    const language = document.getElementById(`${reportType}-language`).value;
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = reportVoices[language] || 'en-US';
-    window.speechSynthesis.speak(utterance);
-}
-
-function pauseSpeech() {
-    window.speechSynthesis.pause();
-}
-
-function stopSpeech() {
-    window.speechSynthesis.cancel();
-}
-</script>
 </body>
 </html>
