@@ -1,195 +1,319 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ agent_name }}</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <style>
-        body { font-family:"Segoe UI", Arial; background:#f4f7fb; margin:20px; }
-        .download-btn, .control-btn { background:#1565c0; color:white; border:none; padding:10px 14px; border-radius:6px; margin-right:10px; margin-top:10px; cursor:pointer; }
-        .control-btn.secondary { background:#2e7d32; }
-        .control-btn.warn { background:#ef6c00; }
-        pre { white-space: pre-wrap; background:#ffffff; padding:12px; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
-        .report-card { background:#fff; padding:16px; border-radius:10px; box-shadow:0 3px 10px rgba(0,0,0,0.08); margin-bottom:20px; }
-        .status-text { color:#455a64; font-size:14px; margin-top:8px; }
-        select { margin-left:8px; padding:6px; border-radius:6px; }
-    </style>
+<title>{{ agent_name }}</title>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+
+body{
+font-family:"Segoe UI",Arial;
+background:linear-gradient(135deg,#0f172a,#1e3a8a,#2563eb);
+margin:20px;
+color:white;
+}
+
+.report-card{
+background:rgba(255,255,255,0.08);
+padding:20px;
+border-radius:14px;
+backdrop-filter:blur(10px);
+box-shadow:0 8px 25px rgba(0,0,0,0.35);
+margin-bottom:25px;
+}
+
+.download-btn,.control-btn{
+background:#3b82f6;
+color:white;
+border:none;
+padding:10px 14px;
+border-radius:6px;
+margin-right:10px;
+margin-top:10px;
+cursor:pointer;
+font-weight:600;
+}
+
+.control-btn.secondary{background:#22c55e;}
+.control-btn.warn{background:#f97316;}
+
+.status-text{
+color:#e2e8f0;
+font-size:14px;
+margin-top:8px;
+}
+
+select{
+margin-left:8px;
+padding:6px;
+border-radius:6px;
+}
+
+pre{
+white-space:pre-wrap;
+background:rgba(255,255,255,0.1);
+padding:12px;
+border-radius:8px;
+color:white;
+}
+
+img{
+box-shadow:0 6px 18px rgba(0,0,0,0.4);
+margin-top:10px;
+border-radius:8px;
+}
+
+a{
+color:#93c5fd;
+text-decoration:none;
+font-weight:600;
+}
+
+</style>
 </head>
+
 <body>
 
 <h2>{{ agent_name }}</h2>
+
+<!-- ================= DIAGNOSIS ================= -->
+
 {% if agent_name|lower == "diagnosis" %}
-    <div class="report-card">
-        <h3>Diagnosis Results</h3>
-        <ul>
-        {% for d in agent_output.results %}
-            <li><strong>{{ d.disease }}</strong> - {{ d.confidence }}%</li>
-        {% endfor %}
-        </ul>
-        <h3>Grad-CAM Visualization</h3>
-        <img src="{{ agent_output.heatmap_url }}" style="max-width:420px;border-radius:8px; align:center;" alt="Grad-CAM heatmap">
 
-        <h3>Original Retina Image</h3>
-        <img src="{{ agent_output.image_url }}" style="max-width:420px;border-radius:8px; align:center;" alt="Original retina image">
+<div class="report-card">
 
-        <h3>Disease Probability Distribution</h3>
-        <canvas id="diseaseProbabilityChart" style="max-width:640px;"></canvas>
-    </div>
+<h3>Diagnosis Results</h3>
+
+<ul>
+{% for d in agent_output.results %}
+<li><strong>{{ d.disease }}</strong> - {{ d.confidence }}%</li>
+{% endfor %}
+</ul>
+
+<h3>Grad-CAM Visualization</h3>
+<img src="{{ agent_output.heatmap_url }}" style="max-width:420px;">
+
+<h3>Original Retina Image</h3>
+<img src="{{ agent_output.image_url }}" style="max-width:420px;">
+
+<h3>Disease Probability Distribution</h3>
+<canvas id="diseaseProbabilityChart" style="max-width:650px;"></canvas>
+
+</div>
+
 <script>
-        const probabilityMap = {{ agent_output.probabilities | tojson }};
-        const labels = Object.keys(probabilityMap || {});
-        const values = Object.values(probabilityMap || {});
 
-        const chartCanvas = document.getElementById('diseaseProbabilityChart');
-        if (window.Chart && chartCanvas && labels.length > 0) {
-            const ctx = chartCanvas.getContext('2d');
-            new window.Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels,
-                    datasets: [{
-                        label: 'Probability (%)',
-                        data: values,
-                        backgroundColor: 'rgba(21, 101, 192, 0.7)',
-                        borderColor: 'rgba(21, 101, 192, 1)',
-                        borderWidth: 1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        title: {
-                            display: true,
-                            text: 'Disease Probability Distribution'
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            max: 100
-                        }
-                    }
-                }
-            });
-        } else if (chartCanvas) {
-            chartCanvas.insertAdjacentHTML(
-                'afterend',
-                '<p style="color:#c62828;">Probability chart unavailable: Chart.js failed to load in this environment.</p>'
-            );
-        }
-    </script>
-{% elif agent_name|lower == "report" %}
-    <div class="report-card">
-        <h3>Patient-Friendly Report</h3>
-        <label for="patient-language">Language:</label>
-        <select id="patient-language" onchange="translateReport('patient')">
-            <option>English</option>
-            <option>Hindi</option>
-            <option>Telugu</option>
-            <option>Spanish</option>
-            <option>French</option>
-        </select>
-        <pre id="patient-report">{{ agent_output.patient_report_text or agent_output.patient_report }}</pre>
-        <div>
-            <button class="download-btn" onclick="downloadVisibleReport('patient', 'patient_report.txt')">Download Patient Report</button>
-            <button class="control-btn secondary" onclick="playReport('patient')">Play</button>
-            <button class="control-btn" onclick="pauseSpeech()">Pause</button>
-            <button class="control-btn warn" onclick="stopSpeech()">Stop</button>
-        </div>
-        <div class="status-text" id="patient-status"></div>
-    </div>
-    
-    <div class="report-card">
-        <h3>Doctor / Clinical Report</h3>
-        <label for="doctor-language">Language:</label>
-        <select id="doctor-language" onchange="translateReport('doctor')">
-            <option>English</option>
-            <option>Hindi</option>
-            <option>Telugu</option>
-            <option>Spanish</option>
-            <option>French</option>
-        </select>
-        <pre id="doctor-report">{{ agent_output.doctor_report_text or agent_output.doctor_report }}</pre>
-        <div>
-            <button class="download-btn" onclick="downloadVisibleReport('doctor', 'doctor_report.txt')">Download Doctor Report</button>
-            <button class="control-btn secondary" onclick="playReport('doctor')">Play</button>
-            <button class="control-btn" onclick="pauseSpeech()">Pause</button>
-            <button class="control-btn warn" onclick="stopSpeech()">Stop</button>
-        </div>
-        <div class="status-text" id="doctor-status"></div>
-    </div>
+const probabilityMap={{ agent_output.probabilities | tojson }};
+const labels=Object.keys(probabilityMap||{});
+const values=Object.values(probabilityMap||{});
 
-    <script>
-    const reportVoices = {
-        English: 'en-US',
-        Hindi: 'hi-IN',
-        Telugu: 'te-IN',
-        Spanish: 'es-ES',
-        French: 'fr-FR'
-    };
+const ctx=document.getElementById('diseaseProbabilityChart');
 
-    async function translateReport(reportType) {
-        const language = document.getElementById(`${reportType}-language`).value;
-        const statusEl = document.getElementById(`${reportType}-status`);
-        statusEl.innerText = `Translating to ${language}...`;
+if(ctx){
 
-        try {
-            const response = await fetch('/translate_report', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ report_type: reportType, language })
-            });
-            const data = await response.json();
-            if (!response.ok) {
-                statusEl.innerText = data.error || 'Translation failed.';
-                return;
-            }
-            document.getElementById(`${reportType}-report`).innerText = data.translated_text;
-            statusEl.innerText = `Translated to ${language}.`;
-        } catch (error) {
-            statusEl.innerText = 'Translation failed. Please try again.';
-        }
-    }
+new Chart(ctx,{
+type:'bar',
+data:{
+labels:labels,
+datasets:[{
+label:'Probability (%)',
+data:values,
+backgroundColor:'rgba(59,130,246,0.7)',
+borderColor:'rgba(59,130,246,1)',
+borderWidth:1
+}]
+},
+options:{
+plugins:{
+legend:{labels:{color:'white'}}
+},
+scales:{
+x:{ticks:{color:'white'},grid:{color:'rgba(255,255,255,0.1)'}},
+y:{ticks:{color:'white'},grid:{color:'rgba(255,255,255,0.1)'},beginAtZero:true,max:100}
+}
+}
+});
 
-    function downloadVisibleReport(reportType, filename) {
-        const reportText = document.getElementById(`${reportType}-report`).innerText;
-        // UTF-8 BOM improves readability in Windows editors for Telugu/Hindi/etc.
-        const utf8Bom = '\uFEFF';
-        const blob = new Blob([utf8Bom + reportText], { type: 'text/plain;charset=utf-8' });
-        const link = document.createElement('a');
-        link.href = window.URL.createObjectURL(blob);
-        link.download = filename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        window.URL.revokeObjectURL(link.href);
-    }
+}
 
-    // Backward-compatible alias if older cached markup calls downloadReport(...)
-    function downloadReport(reportType, filename) {
-        downloadVisibleReport(reportType, filename);
-    }
+</script>
 
-    function playReport(reportType) {
-        stopSpeech();
-        const text = document.getElementById(`${reportType}-report`).innerText;
-        const language = document.getElementById(`${reportType}-language`).value;
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = reportVoices[language] || 'en-US';
-        window.speechSynthesis.speak(utterance);
-    }
+<!-- ================= VALIDATION ================= -->
 
-    function pauseSpeech() {
-        window.speechSynthesis.pause();
-    }
+{% elif agent_name|lower == "validation" %}
 
-    function stopSpeech() {
-        window.speechSynthesis.cancel();
-    }
-    </script>
+<div class="report-card">
+
+<h3>Validation Analysis</h3>
+
+{% for item in agent_output %}
+
+<div style="
+background:rgba(255,255,255,0.08);
+border-radius:12px;
+padding:18px;
+margin-bottom:15px;
+border-left:6px solid
+{% if item.validation_status=='Confirmed' %}
+#22c55e
 {% else %}
-    <pre>{{ agent_output }}</pre>
+#f97316
 {% endif %}
-<a href="/">Back to Dashboard</a>
+">
+
+<h3>{{ item.disease }}</h3>
+
+<p>Confidence: {{ item.confidence }}%</p>
+
+<p>Status: {{ item.validation_status }}</p>
+
+</div>
+
+{% endfor %}
+
+</div>
+
+<!-- ================= REPORT ================= -->
+
+{% elif agent_name|lower == "report" %}
+
+<div class="report-card">
+
+<h3>Patient-Friendly Report</h3>
+
+<label>Language:</label>
+
+<select id="patient-language" onchange="translateReport('patient')">
+<option>English</option>
+<option>Hindi</option>
+<option>Telugu</option>
+<option>Spanish</option>
+<option>French</option>
+</select>
+
+<pre id="patient-report">
+{{ agent_output.patient_report_text or agent_output.patient_report }}
+</pre>
+
+<div>
+<button class="download-btn" onclick="downloadReport('patient','patient_report.txt')">Download Patient Report</button>
+<button class="control-btn secondary" onclick="playReport('patient')">Play</button>
+<button class="control-btn" onclick="pauseSpeech()">Pause</button>
+<button class="control-btn warn" onclick="stopSpeech()">Stop</button>
+</div>
+
+<div class="status-text" id="patient-status"></div>
+
+</div>
+
+
+<div class="report-card">
+
+<h3>Doctor / Clinical Report</h3>
+
+<label>Language:</label>
+
+<select id="doctor-language" onchange="translateReport('doctor')">
+<option>English</option>
+<option>Hindi</option>
+<option>Telugu</option>
+<option>Spanish</option>
+<option>French</option>
+</select>
+
+<pre id="doctor-report">
+{{ agent_output.doctor_report_text or agent_output.doctor_report }}
+</pre>
+
+<div>
+<button class="download-btn" onclick="downloadReport('doctor','doctor_report.txt')">Download Doctor Report</button>
+<button class="control-btn secondary" onclick="playReport('doctor')">Play</button>
+<button class="control-btn" onclick="pauseSpeech()">Pause</button>
+<button class="control-btn warn" onclick="stopSpeech()">Stop</button>
+</div>
+
+<div class="status-text" id="doctor-status"></div>
+
+</div>
+
+<script>
+
+const reportVoices={
+English:'en-US',
+Hindi:'hi-IN',
+Telugu:'te-IN',
+Spanish:'es-ES',
+French:'fr-FR'
+};
+
+function translateReport(reportType){
+
+const language=document.getElementById(reportType+"-language").value;
+
+fetch("/translate_report",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({
+report_type:reportType,
+language:language
+})
+})
+.then(r=>r.json())
+.then(data=>{
+document.getElementById(reportType+"-report").innerText=data.translated_text;
+document.getElementById(reportType+"-status").innerText="Translated to "+language;
+})
+.catch(()=>{
+document.getElementById(reportType+"-status").innerText="Translation failed";
+});
+
+}
+
+function downloadReport(type,file){
+
+const text=document.getElementById(type+"-report").innerText;
+
+const blob=new Blob([text],{type:"text/plain"});
+
+const link=document.createElement("a");
+link.href=URL.createObjectURL(blob);
+link.download=file;
+link.click();
+
+}
+
+function playReport(type){
+
+const text=document.getElementById(type+"-report").innerText;
+const lang=document.getElementById(type+"-language").value;
+
+const utter=new SpeechSynthesisUtterance(text);
+utter.lang=reportVoices[lang]||"en-US";
+
+speechSynthesis.speak(utter);
+
+}
+
+function pauseSpeech(){
+speechSynthesis.pause();
+}
+
+function stopSpeech(){
+speechSynthesis.cancel();
+}
+
+</script>
+
+{% else %}
+
+<pre>{{ agent_output }}</pre>
+
+{% endif %}
+
+<br>
+<a href="/">⬅ Back to Dashboard</a>
+
 </body>
+
 </html>
